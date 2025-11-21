@@ -12,6 +12,7 @@
     </style>
 </head>
 <body>
+{% raw %}
 <div class="container-fluid p-4" id="app">
     <div class="row">
         <div class="col-md-6">
@@ -30,6 +31,43 @@
                     </button>
                     <div class="mt-3 p-2 bg-light border rounded">
                         <small>Target URL: <a :href="quizUrl" target="_blank">{{ quizUrl }}</a></small>
+                    </div>
+                    <div class="mt-4 p-3 bg-light border rounded">
+                        <h6 class="mb-3">2. Trigger Agent Endpoint</h6>
+                        <div class="mb-2">
+                            <label class="form-label mb-1">Agent Endpoint URL</label>
+                            <input
+                                v-model="agentEndpoint"
+                                type="url"
+                                class="form-control"
+                                placeholder="https://example.com/your-endpoint"
+                            >
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label mb-1">Email</label>
+                            <input
+                                v-model="studentEmail"
+                                type="email"
+                                class="form-control"
+                                placeholder="student@example.com"
+                            >
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label mb-1">Secret</label>
+                            <input
+                                v-model="studentSecret"
+                                type="text"
+                                class="form-control"
+                                placeholder="TEST_SECRET"
+                            >
+                        </div>
+                        <button class="btn btn-primary" @click="triggerAgent" :disabled="sending">
+                            <span v-if="sending">Sending...</span>
+                            <span v-else>Send Test Payload</span>
+                        </button>
+                        <div v-if="sendStatus" class="mt-2 small text-muted">
+                            {{ sendStatus }}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -60,6 +98,7 @@
         </div>
     </div>
 </div>
+{% endraw %}
 
 <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
 <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
@@ -81,7 +120,12 @@
         data: {
             submissions: [],
             loading: false,
-            serverBase: window.location.origin
+            serverBase: window.location.origin,
+            agentEndpoint: '',
+            studentEmail: '',
+            studentSecret: '',
+            sending: false,
+            sendStatus: ''
         },
         computed: {
             quizUrl() { return this.serverBase + '/quiz'; }
@@ -112,6 +156,37 @@
                 fetch('/api/submissions')
                     .then(r => r.json())
                     .then(d => { this.submissions = d; });
+            },
+            triggerAgent() {
+                if (!this.agentEndpoint) {
+                    alert('Please enter an Agent Endpoint URL.');
+                    return;
+                }
+                this.sending = true;
+                this.sendStatus = '';
+                fetch('/api/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        endpoint: this.agentEndpoint,
+                        email: this.studentEmail || 'student@example.com',
+                        secret: this.studentSecret || 'TEST_SECRET'
+                    })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.error) {
+                            this.sendStatus = 'Error: ' + data.error;
+                        } else {
+                            this.sendStatus = 'Sent. Agent responded with HTTP ' + data.status_code;
+                        }
+                    })
+                    .catch(e => {
+                        this.sendStatus = 'Error: ' + e;
+                    })
+                    .finally(() => {
+                        this.sending = false;
+                    });
             }
         },
         mounted() {
@@ -121,4 +196,3 @@
 </script>
 </body>
 </html>
-

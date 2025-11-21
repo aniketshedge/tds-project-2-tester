@@ -1,6 +1,7 @@
 import os
 import random
 
+import requests
 from flask import Flask, jsonify, render_template, request
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -12,7 +13,15 @@ app = Flask(__name__)
 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+
+if OPENAI_API_KEY:
+    if OPENAI_BASE_URL:
+        client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+    else:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+else:
+    client = None
 
 
 current_quiz_html = "<h1>Welcome</h1><p>Waiting for a challenge...</p>"
@@ -110,6 +119,38 @@ def get_submissions():
     return jsonify(received_submissions)
 
 
+@app.route("/api/send", methods=["POST"])
+def send_test_payload():
+    """Send a test POST payload to a student Agent endpoint."""
+    data = request.get_json(silent=True) or {}
+
+    endpoint = data.get("endpoint")
+    email = data.get("email") or "student@example.com"
+    secret = data.get("secret") or "TEST_SECRET"
+
+    if not endpoint:
+        return jsonify({"error": "Missing 'endpoint' in request body"}), 400
+
+    quiz_url = request.host_url.rstrip("/") + "/quiz"
+
+    payload = {
+        "email": email,
+        "secret": secret,
+        "url": quiz_url,
+    }
+
+    try:
+        resp = requests.post(endpoint, json=payload, timeout=15)
+        return jsonify(
+            {
+                "ok": True,
+                "status_code": resp.status_code,
+                "response_body": resp.text,
+            }
+        )
+    except requests.RequestException as exc:  # noqa: BLE001
+        return jsonify({"error": str(exc)}), 502
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=9000, debug=True)
-

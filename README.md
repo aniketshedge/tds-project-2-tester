@@ -254,6 +254,26 @@ Location: `mock-tool/templates/index.html`
     - Alerts `Quiz Live!` on success.
   - Shows the **Target URL** (`quizUrl`) that your Agent should use.
 
+- **Left Panel – 2. Trigger Agent Endpoint**
+  - Small form to **manually enter**:
+    - Your Agent **endpoint URL** (the app that implements the project brief).
+    - Your **email**.
+    - Your **secret**.
+  - Button **"Send Test Payload"**:
+    - Calls `/api/send` on this tester.
+    - The tester server then sends a POST payload to your Agent endpoint:
+      ```jsonc
+      {
+        "email": "<email you entered>",
+        "secret": "<secret you entered>",
+        "url": "http://localhost:9000/quiz" // or whatever your tester base URL is
+      }
+      ```
+    - The Agent should then:
+      - Validate the secret.
+      - Visit the provided `url` (the tester’s `/quiz`).
+      - Solve the quiz and POST the answer to the submit URL given on that page.
+
 - **Right Panel – 2. Agent Submissions**
   - Displays a card per submission:
     - A highlighted `Answer Received:` block showing `sub.payload.answer`.
@@ -286,6 +306,11 @@ Create a `.env` file in `mock-tool/`:
 
 ```env
 OPENAI_API_KEY=sk-your-api-key-here
+
+# Optional: point to a custom OpenAI-compatible endpoint
+# For example, a proxy or self-hosted server that speaks the same API.
+# If omitted, the official OpenAI API base URL is used by default.
+# OPENAI_BASE_URL=https://your-custom-endpoint.example.com/v1
 ```
 
 - If `OPENAI_API_KEY` is **missing or invalid**, the app still runs, but:
@@ -339,10 +364,15 @@ Key URLs:
    - The "Target URL" box shows the `/quiz` URL; this is what you feed your Agent.
 
 5. **Run your Agent**
-   - Configure your Agent (in your other repo) to:
-     - Accept the initial POST (as per `project-brief.md`).
-     - When `url` is your **local** `/quiz` URL (e.g. `http://localhost:9000/quiz`), load that.
-   - Start your Agent and trigger a run.
+   - In the **Trigger Agent Endpoint** section:
+     - Enter your Agent endpoint URL (where your project listens).
+     - Enter your email and secret (the same ones you’ll submit in the Google Form).
+     - Click **"Send Test Payload"**.
+   - The tester will POST the payload to your Agent with `url` set to the tester’s `/quiz` URL.
+   - Your Agent should now:
+     - Validate `secret`.
+     - Visit the given `url` (the quiz page hosted by this tester).
+     - Follow the instructions on that page and submit the answer to the indicated submit URL.
 
 6. **Inspect submissions**
    - Watch the right-hand panel (“Agent Submissions”) update every 2 seconds.
@@ -368,7 +398,7 @@ Although your Agent’s full implementation lives elsewhere, this tool is design
 ### 9.1. Typical Local Testing Flow
 
 1. **Simulate the evaluation server’s POST to your Agent**  
-   - Send your Agent something like:
+   - Use the **"Send Test Payload"** button in the tester UI, or manually send:
      ```jsonc
      {
        "email": "you@university.edu",
@@ -451,6 +481,10 @@ You can extend this mock server to better match how you design your Agent:
     ```env
     OPENAI_API_KEY=sk-your-api-key-here
     ```
+  - If you use a custom endpoint, also verify:
+    ```env
+    OPENAI_BASE_URL=https://your-custom-endpoint.example.com/v1
+    ```
   - Restart the server after editing `.env`.
 
 - **Agent submissions not appearing**
@@ -477,4 +511,3 @@ Once this mock tool is up and running smoothly with your Agent:
   - Your prompt strategies (system + user prompts) are robust against prompt injection and other adversarial content.
 
 Use this repo as a safe sandbox to explore edge cases and improve your Agent’s reliability before final evaluation.
-

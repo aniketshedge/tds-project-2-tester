@@ -2,6 +2,7 @@ import os
 import random
 
 import requests
+import httpx
 from flask import Flask, jsonify, render_template, request
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -14,12 +15,24 @@ app = Flask(__name__)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-nano")
+OPENAI_INSECURE_SKIP_VERIFY = (
+    os.getenv("OPENAI_INSECURE_SKIP_VERIFY", "false").lower() in ("1", "true", "yes")
+)
 
 if OPENAI_API_KEY:
+    http_client = None
+    if OPENAI_INSECURE_SKIP_VERIFY:
+        # Development-only: disable TLS verification for custom/self-signed endpoints.
+        http_client = httpx.Client(verify=False)
+
+    client_kwargs: dict = {"api_key": OPENAI_API_KEY}
     if OPENAI_BASE_URL:
-        client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
-    else:
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        client_kwargs["base_url"] = OPENAI_BASE_URL
+    if http_client is not None:
+        client_kwargs["http_client"] = http_client
+
+    client = OpenAI(**client_kwargs)
 else:
     client = None
 
@@ -60,19 +73,27 @@ def generate_question():
     user_prompt = f"Generate a task involving: {task_type}. Keep it concise."
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-5-nano",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.8,
-            max_tokens=500,
-        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        completion_kwargs = {
+            "model": OPENAI_MODEL,
+            "messages": messages,
+        }
+
+        # For reasoning-capable models like gpt-5.1, opt into low effort by default.
+        if OPENAI_MODEL.startswith("gpt-5.1"):
+            completion_kwargs["effort"] = "low"
+
+        response = client.chat.completions.create(**completion_kwargs)
         html_content = response.choices[0].message.content
         html_content = html_content.replace("```html", "").replace("```", "")
         return jsonify({"html": html_content})
     except Exception as exc:  # noqa: BLE001
+        # Log full details to the server console to aid debugging
+        app.logger.exception("Error while calling OpenAI for quiz generation")
         return jsonify({"error": str(exc)}), 500
 
 

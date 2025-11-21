@@ -311,6 +311,16 @@ OPENAI_API_KEY=sk-your-api-key-here
 # For example, a proxy or self-hosted server that speaks the same API.
 # If omitted, the official OpenAI API base URL is used by default.
 # OPENAI_BASE_URL=https://your-custom-endpoint.example.com/v1
+
+# Optional: override the model used by the tester.
+# Defaults to gpt-5-nano. For reasoning models like gpt-5.1, the tester
+# will automatically set effort=low for generations.
+# OPENAI_MODEL=gpt-5.1
+
+# Optional: development-only TLS bypass for self-signed / intercepted HTTPS.
+# DO NOT enable this in production; it disables certificate verification for
+# OpenAI requests made by this tester.
+# OPENAI_INSECURE_SKIP_VERIFY=false
 ```
 
 - If `OPENAI_API_KEY` is **missing or invalid**, the app still runs, but:
@@ -485,6 +495,14 @@ You can extend this mock server to better match how you design your Agent:
     ```env
     OPENAI_BASE_URL=https://your-custom-endpoint.example.com/v1
     ```
+   - If you see TLS / certificate errors (e.g. `self-signed certificate in certificate chain`)
+     in your terminal logs and you are in a controlled dev environment with a proxy or
+     self-signed gateway, you can temporarily set:
+     ```env
+     OPENAI_INSECURE_SKIP_VERIFY=true
+     ```
+     (Restart the server after changing this.) This disables TLS verification only for
+     the tester’s calls to the OpenAI-compatible endpoint.
   - Restart the server after editing `.env`.
 
 - **Agent submissions not appearing**

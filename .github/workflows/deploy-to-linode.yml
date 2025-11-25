@@ -14,6 +14,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Keep local, untracked files like mock-tool/.env
+          clean: false
 
       - name: Install dependencies
         working-directory: mock-tool

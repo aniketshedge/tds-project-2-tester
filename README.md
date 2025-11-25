@@ -302,7 +302,7 @@ pip install -r requirements.txt
 
 ### 6.3. Configure Environment
 
-Create a `.env` file in `mock-tool/`:
+Create a `.env` file in `mock-tool/` (you can copy from `.env.example`):
 
 ```env
 OPENAI_API_KEY=sk-your-api-key-here
@@ -322,6 +322,9 @@ OPENAI_API_KEY=sk-your-api-key-here
 # OpenAI requests made by this tester.
 # OPENAI_INSECURE_SKIP_VERIFY=false
 ```
+
+The `mock-tool/.env.example` file is tracked in git and serves as a template.  
+The real `mock-tool/.env` file is **not** tracked (ignored via the root `.gitignore`) so your secrets stay local while CI/CD and systemd continue to load them.
 
 - If `OPENAI_API_KEY` is **missing or invalid**, the app still runs, but:
   - `POST /api/generate` returns an error.

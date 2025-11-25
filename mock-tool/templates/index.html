@@ -25,6 +25,9 @@
                     </button>
                 </div>
                 <div class="card-body d-flex flex-column">
+                    <div v-if="generationError" class="alert alert-danger mb-2">
+                        {{ generationError }}
+                    </div>
                     <div id="editor-container"></div>
                     <button class="btn btn-success mt-3" @click="deployQuiz">
                         Update / Deploy Quiz Page
@@ -125,31 +128,50 @@
             studentEmail: '',
             studentSecret: '',
             sending: false,
-            sendStatus: ''
+            sendStatus: '',
+            generationError: ''
         },
         computed: {
             quizUrl() { return this.serverBase + '/quiz'; }
         },
         methods: {
             deployQuiz() {
+                let html = quill.root.innerHTML || "";
+                const plainText = quill.getText().trim();
+
+                // If the HTML is effectively empty but there is plain text,
+                // fall back to wrapping the text in a <p> tag so that it
+                // appears correctly on the quiz page.
+                const defaultEmptyHtml = "<p><br></p>";
+                if ((!html || html.trim() === "" || html.trim() === defaultEmptyHtml) && plainText) {
+                    html = "<p>" + plainText + "</p>";
+                }
+
                 fetch('/set_quiz', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ html: quill.root.innerHTML })
+                    body: JSON.stringify({ html: html })
                 }).then(() => alert('Quiz Live!'));
             },
             generateAI() {
                 this.loading = true;
+                this.generationError = '';
                 fetch('/api/generate', { method: 'POST' })
                     .then(r => r.json())
                     .then(data => {
                         if (data.error) {
-                            alert("Error: " + data.error);
+                            const msg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+                            this.generationError = 'Generate Random Question failed: ' + msg;
+                            alert("Error: " + msg);
                         } else {
                             quill.clipboard.dangerouslyPasteHTML(data.html);
                         }
                     })
-                    .catch(e => alert(e))
+                    .catch(e => {
+                        const msg = e && e.message ? e.message : String(e);
+                        this.generationError = 'Generate Random Question failed: ' + msg;
+                        alert(msg);
+                    })
                     .finally(() => { this.loading = false; });
             },
             fetchSubmissions() {

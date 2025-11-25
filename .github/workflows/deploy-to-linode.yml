@@ -1,0 +1,38 @@
+name: Deploy mock-tool to Linode
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    # This job runs directly on your Linode via a self-hosted runner.
+    # Make sure your runner is registered with these labels.
+    runs-on: [self-hosted, linux]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: mock-tool
+        run: |
+          set -e
+          if [ ! -d "venv" ]; then
+            python -m venv venv
+          fi
+          . venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Restart service
+        run: |
+          # Adjust the service name to match your systemd unit
+          sudo systemctl restart tds-gym.service
+

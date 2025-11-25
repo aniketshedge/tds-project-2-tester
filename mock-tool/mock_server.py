@@ -1,5 +1,7 @@
+import logging
 import os
 import random
+from logging.handlers import RotatingFileHandler
 
 import requests
 import httpx
@@ -11,6 +13,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+
+# File-based logging (for debugging on the server)
+LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+log_path = os.path.join(LOG_DIR, "mock_server.log")
+file_handler = RotatingFileHandler(log_path, maxBytes=1_000_000, backupCount=3)
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+file_handler.setFormatter(formatter)
+
+logger = app.logger
+logger.handlers.clear()
+logger.addHandler(file_handler)
+logger.setLevel(logging.INFO)
 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -35,6 +54,14 @@ if OPENAI_API_KEY:
     client = OpenAI(**client_kwargs)
 else:
     client = None
+
+logger.info(
+    "mock_server starting with model=%s base_url=%s insecure_skip_verify=%s client_configured=%s",
+    OPENAI_MODEL,
+    OPENAI_BASE_URL,
+    OPENAI_INSECURE_SKIP_VERIFY,
+    bool(client),
+)
 
 
 current_quiz_html = "<h1>Welcome</h1><p>Waiting for a challenge...</p>"
@@ -73,6 +100,11 @@ def generate_question():
     user_prompt = f"Generate a task involving: {task_type}. Keep it concise."
 
     try:
+        logger.info(
+            "api_generate: requesting quiz HTML from model=%s task_type=%s",
+            OPENAI_MODEL,
+            task_type,
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -90,10 +122,15 @@ def generate_question():
         response = client.chat.completions.create(**completion_kwargs)
         html_content = response.choices[0].message.content
         html_content = html_content.replace("```html", "").replace("```", "")
+        logger.info(
+            "api_generate: received HTML length=%d snippet=%r",
+            len(html_content),
+            html_content[:200],
+        )
         return jsonify({"html": html_content})
     except Exception as exc:  # noqa: BLE001
         # Log full details to the server console to aid debugging
-        app.logger.exception("Error while calling OpenAI for quiz generation")
+        logger.exception("Error while calling OpenAI for quiz generation")
         return jsonify({"error": str(exc)}), 500
 
 
@@ -103,6 +140,11 @@ def set_quiz():
 
     data = request.get_json(silent=True) or {}
     current_quiz_html = data.get("html", "") or ""
+    logger.info(
+        "set_quiz: updated quiz HTML length=%d snippet=%r",
+        len(current_quiz_html),
+        current_quiz_html[:200],
+    )
     received_submissions.clear()
     return jsonify({"status": "updated"})
 
@@ -110,6 +152,11 @@ def set_quiz():
 @app.route("/quiz")
 def render_quiz():
     submit_url = request.host_url + "submit"
+    logger.info(
+        "render_quiz: current_quiz_html length=%d snippet=%r",
+        len(current_quiz_html),
+        current_quiz_html[:200],
+    )
     injected_footer = f"""
     <hr>
     <div style="background: #f0f0f0; padding: 15px; border-top: 2px solid #333;">
@@ -131,6 +178,11 @@ def render_quiz():
 @app.route("/submit", methods=["POST"])
 def handle_submission():
     data = request.get_json(silent=True)
+    logger.info(
+        "submit: received payload type=%s keys=%s",
+        type(data).__name__,
+        sorted(list(data.keys())) if isinstance(data, dict) else None,
+    )
     received_submissions.insert(0, {"payload": data})
     return jsonify({"correct": True, "message": "Mock Server: Correct!"})
 
@@ -161,7 +213,17 @@ def send_test_payload():
     }
 
     try:
+        logger.info(
+            "api_send: posting to endpoint=%s with payload=%r",
+            endpoint,
+            payload,
+        )
         resp = requests.post(endpoint, json=payload, timeout=15)
+        logger.info(
+            "api_send: got status_code=%s response_length=%d",
+            resp.status_code,
+            len(resp.text),
+        )
         return jsonify(
             {
                 "ok": True,
@@ -170,6 +232,7 @@ def send_test_payload():
             }
         )
     except requests.RequestException as exc:  # noqa: BLE001
+        logger.exception("api_send: error posting to endpoint")
         return jsonify({"error": str(exc)}), 502
 
 
